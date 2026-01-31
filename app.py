@@ -4,7 +4,7 @@ import random
 
 # --- INSTELLINGEN ---
 # VERVANG DEZE LINK door jouw eigen link van Render!
-URL = "https://online-server-tama-2.onrender.com/update"
+URL = "https://online-server-tama-2-1.onrender.com/update"
 MIJN_NAAM = "Putsie" 
 MIJN_KLEUR = (0, 255, 0) # Felgroen zodat je jezelf goed ziet
 
@@ -64,3 +64,4 @@ while running:
     clock.tick(60) # 60 frames per seconde voor soepel wandelen
 
 pygame.quit()
+
