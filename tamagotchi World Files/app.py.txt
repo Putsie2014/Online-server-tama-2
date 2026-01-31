@@ -1,38 +1,33 @@
-from flask import Flask, request, jsonify
-import time
-import os
+from flask import Flask, request, jsonify, render_template_string
+import json, os, time
 
 app = Flask(__name__)
+all_chats = []
+players_online = {}
 
-# Dit onthoudt de locaties van alle spelers
-players = {}
+HTML_GAME = """
+<!DOCTYPE html>
+<html>
+<head><title>Tamagotchi Cloud</title></head>
+<body style="background:#1a1a2e; color:white; text-align:center;">
+    <h1>De game is ONLINE! 🚀</h1>
+    <p>Als je dit ziet, werkt de server.</p>
+    <canvas id="gameCanvas" width="500" height="300" style="background:#27ae60;"></canvas>
+    <script>
+        console.log("Game gestart!");
+    </script>
+</body>
+</html>
+"""
+
+@app.route('/')
+def index():
+    return render_template_string(HTML_GAME)
 
 @app.route('/update', methods=['POST'])
 def update():
-    data = request.json
-    user = data.get("user")
-    
-    # Sla de gegevens van de speler op
-    players[user] = {
-        "x": data.get("x"), 
-        "y": data.get("y"),
-        "has_car": data.get("has_car", False), 
-        "last_seen": time.time()
-    }
-    
-    # Verwijder spelers die langer dan 15 seconden offline zijn
-    now = time.time()
-    for name in list(players.keys()):
-        if now - players[name]["last_seen"] > 15:
-            del players[name]
-            
-    return jsonify({"all_players": players})
-
-@app.route('/')
-def home():
-    return "Tamagotchi Online Server is LIVE!"
+    return jsonify({"status": "ok", "chats": all_chats, "all_players": players_online})
 
 if __name__ == "__main__":
-    # Render geeft ons een poort via een omgevingsvariabele
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
