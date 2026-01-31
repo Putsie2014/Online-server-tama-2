@@ -1,46 +1,42 @@
 import os
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# Dit zijn de 'lijsten' waar de server alles in onthoudt
-all_chats = []
-players_online = {}
-
-# Een simpele 'test' pagina zodat je ziet dat hij werkt
-HTML_PAGE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Tamagotchi Server</title>
-    <style>
-        body { background: #1a1a2e; color: white; font-family: sans-serif; text-align: center; padding-top: 50px; }
-        .status { color: #4ee44e; font-weight: bold; }
-    </style>
-</head>
-<body>
-    <h1>🚀 Je Tamagotchi Server is LIVE!</h1>
-    <p>Status: <span class="status">Verbonden</span></p>
-    <p>Je kunt nu je game verbinden met deze URL.</p>
-</body>
-</html>
-"""
+# De 'database' in het geheugen van de server
+wereld_status = {
+    "spelers": {}, # Hier komt: {"Naam": {"x": 10, "y": 20, "honger": 50}}
+    "chat": []     # Hier komen de laatste 10 berichtjes
+}
 
 @app.route('/')
-def index():
-    return render_template_string(HTML_PAGE)
+def home():
+    return "Tamagotchi Multiplayer Server is ONLINE! 🌍"
 
-# Dit deel zorgt voor de chat en de spelers
 @app.route('/update', methods=['POST'])
 def update():
     data = request.json
-    # Hier kun je later logica toevoegen om chats op te slaan
-    return jsonify({
-        "status": "ok",
-        "message": "Data ontvangen door de server!"
-    })
+    naam = data.get("naam")
+    actie = data.get("actie") # 'update' of 'chat'
+
+    if actie == "update" and naam:
+        # Update de positie en status van de speler
+        wereld_status["spelers"][naam] = {
+            "x": data.get("x"),
+            "y": data.get("y"),
+            "honger": data.get("honger"),
+            "tijd": data.get("tijd")
+        }
+    
+    elif actie == "chat" and naam:
+        # Voeg bericht toe aan de lijst
+        nieuw_bericht = f"{naam}: {data.get('bericht')}"
+        wereld_status["chat"].append(nieuw_bericht)
+        # Onthoud alleen de laatste 10 berichtjes
+        wereld_status["chat"] = wereld_status["chat"][-10:]
+
+    return jsonify(wereld_status)
 
 if __name__ == "__main__":
-    # DIT IS HET BELANGRIJKSTE DEEL VOOR RENDER:
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
