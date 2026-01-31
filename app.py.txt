@@ -1,0 +1,137 @@
+from flask import Flask, request, jsonify, render_template_string
+import json, os, time
+
+app = Flask(__name__)
+DATA_FILE = "database.json"
+all_chats = []
+players_online = {}
+
+# --- DIT IS DE GAME CODE (HTML/JavaScript) DIE IN DE BROWSER DRAAIT ---
+HTML_GAME = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tamagotchi Cloud World</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { margin: 0; background: #1a1a2e; color: white; font-family: 'Arial', sans-serif; overflow: hidden; }
+        canvas { background: #27ae60; display: block; }
+        #ui { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 8px; pointer-events: none; }
+        #chatbox { position: absolute; bottom: 10px; left: 10px; width: 300px; background: rgba(0,0,0,0.8); border-radius: 5px; }
+        #messages { height: 120px; overflow-y: auto; font-size: 13px; padding: 10px; border-bottom: 1px solid #444; }
+        #chatInput { width: 100%; border: none; padding: 10px; background: #333; color: white; border-radius: 0 0 5px 5px; outline: none; }
+        #shopBtn { position: absolute; top: 10px; right: 10px; padding: 10px 20px; background: #9b59b6; border: none; color: white; cursor: pointer; border-radius: 5px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <b>💰 Geld:</b> €<span id="moneyText">0</span><br>
+        <b>👥 Online:</b> <span id="pcount">0</span>
+    </div>
+    <button id="shopBtn">Winkel (Auto €500)</button>
+    <canvas id="gameCanvas"></canvas>
+    <div id="chatbox">
+        <div id="messages"></div>
+        <input type="text" id="chatInput" placeholder="Typ een bericht...">
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let user = prompt("Hoe heet je?") || "Speler" + Math.floor(Math.random()*999);
+        let myPos = { x: 1000, y: 1000 };
+        let myStats = { money: 100, has_car: false };
+        let players = {};
+
+        const keys = {};
+        window.onkeydown = (e) => keys[e.key] = true;
+        window.onkeyup = (e) => keys[e.key] = false;
+
+        async function sync() {
+            try {
+                const res = await fetch('/update', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user, x: myPos.x, y: myPos.y, has_car: myStats.has_car, stats: myStats })
+                });
+                const data = await res.json();
+                players = data.all_players;
+                document.getElementById('pcount').innerText = Object.keys(players).length;
+                document.getElementById('moneyText').innerText = myStats.money;
+                
+                const msgDiv = document.getElementById('messages');
+                msgDiv.innerHTML = data.chats.map(m => `<div>${m}</div>`).join('');
+                msgDiv.scrollTop = msgDiv.scrollHeight;
+            } catch(e) {}
+        }
+
+        document.getElementById('shopBtn').onclick = () => {
+            if (myStats.money >= 500) {
+                myStats.money -= 500;
+                myStats.has_car = true;
+                alert("Auto gekocht! 🏎️");
+            } else { alert("Niet genoeg geld!"); }
+        };
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let speed = myStats.has_car ? 10 : 5;
+            if(keys['ArrowUp']) myPos.y -= speed;
+            if(keys['ArrowDown']) myPos.y += speed;
+            if(keys['ArrowLeft']) myPos.x -= speed;
+            if(keys['ArrowRight']) myPos.x += speed;
+
+            for(let p in players) {
+                let pData = players[p];
+                let screenX = pData.x - myPos.x + canvas.width/2;
+                let screenY = pData.y - myPos.y + canvas.height/2;
+                ctx.font = "40px Arial";
+                ctx.fillText(pData.has_car ? "🏎️" : "🤠", screenX, screenY);
+                ctx.font = "14px Arial"; ctx.fillStyle = "white";
+                ctx.fillText(p, screenX, screenY + 20);
+            }
+            requestAnimationFrame(draw);
+        }
+
+        document.getElementById('chatInput').onkeypress = async (e) => {
+            if(e.key === 'Enter') {
+                await fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ user, msg: e.target.value })
+                });
+                e.target.value = '';
+            }
+        };
+
+        setInterval(sync, 200);
+        draw();
+    </script>
+</body>
+</html>
+"""
+
+@app.route('/')
+def index():
+    return render_template_string(HTML_GAME)
+
+@app.route('/update', methods=['POST'])
+def update():
+    data = request.json
+    user = data.get("user")
+    players_online[user] = {"x": data.get("x"), "y": data.get("y"), "has_car": data.get("has_car"), "last_seen": time.time()}
+    # Cloud saving (simpel voor nu)
+    return jsonify({"all_players": players_online, "chats": all_chats})
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    data = request.json
+    all_chats.append(f"{data['user']}: {data['msg']}")
+    if len(all_chats) > 15: all_chats.pop(0)
+    return jsonify({"status": "ok"})
+
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
